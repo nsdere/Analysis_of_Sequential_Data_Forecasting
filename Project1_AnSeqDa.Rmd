@@ -1,0 +1,268 @@
+---
+title: "Analysis of Sequential Data PART 1"
+output:
+  pdf_document: 
+    fig_height: 4
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## A Project on Time Series
+
+## I. DATA
+>From the library Mcomp, one of the monthly time series from the M3 forecasting competition is chosen to be analyzed in this Project. The series number is M34 and the name of the time series is N1435.  
+It has 51 observations(historical data) from January 1990 to March 1994 and the number of required forecasts(future data) is 18 which will be from April 1994 to September 1995.
+
+```{r library}
+library(Mcomp)
+```
+```{r tsLoad}
+monthly_ts_list <- subset(M3,"monthly")
+fc <- monthly_ts_list[[34]]
+```
+
+## II.	EXPLORATORY ANALYSIS
+
+>***a. Plot the time series. What do you note by visual inspection?***  
+Figure below shows the monthly number of shipments of training data.   
+This time plot has a long term decreasing trend. There is no cyclic pattern or seasonality can be detected from this data. 
+
+```{r plotTS, echo=FALSE}
+autoplot(fc) 
+```
+
+
+>***b.	Corroborate your analysis by checking the seasonal plots and the autocorrelogram.***  
+Since there was no seasonality observed from the data, there is no such an information can be detected from seasonal plot due to monthly period. 
+
+>  Here, the data plotted against the individual "seasons" in which the data were observed. Using seasonal plot we can clearly see the underlying seasonality pattern. And in this case, we can easily see that there is a huge gap within a month.  
+For example, as it is presented incoming figure, May is a month that there was the least shipment for 1992 and one of the most shipments for 1990. 
+We couldn't select a specific month and make an analysis about its general trend.
+
+```{r plotSeason, echo=FALSE}
+ggseasonplot(fc$x, year.labels=TRUE, year.labels.left=TRUE) 
+```
+
+>The same goes for subseries plot as well. One can detect that, almost all the subseries plots showing decreasing trend.
+
+```{r plotSubseries, echo=FALSE}
+ggsubseriesplot(fc$x, year.labels=TRUE, year.labels.left=TRUE) 
+```
+
+>The graph below (Polar seasonal plot) clearly shows how the variation is. 
+
+```{r plotPolar, echo=FALSE}
+ggseasonplot(fc$x, polar=TRUE, year.labels=TRUE, year.labels.left=TRUE) 
+```
+
+>The autocorrelation function (ACF) is plotted by calculating and graphing the residuals.  
+The autocorrelogram shows the residuals lie down inside of the blue borders which represents the residuals are actually white noise, other than the outlier, having no such a correlation. 
+
+```{r plotACF, echo=FALSE}
+ggAcf(fc$x)
+```
+
+
+## III.	INDICATORS
+
+>***Select two meaningful indicators for the forecast on this time series. Point out what could be a good objective on both indicators.***  
+**MAE(Mean Absolute Error)** avoids the problem of positive and negative forecast errors. As the name suggests, the mean absolute error is the average of the absolute values of the forecast errors.  
+**MSE(Mean Squared Error)** also avoids the challenge of positive and negative forecast errors offsetting each other. It is obtained by:
+· First, calculating the square of the forecast error
+· Then, taking the average of the squared forecast error  
+The size of MAE or RMSE depends upon the scale of the data. As a result, it is difficult to make comparisons for a different time interval.  
+In such cases, use  
+**MAPE (mean absolute percentage error)**.
+Steps for calculating MAPE:  
+a) by dividing the absolute forecast error by the actual value,
+b) calculating the average of individual absolute percentage error.
+If the data series has few values which are zero or very small (close to zero), MAPE would not be a correct metric to compare the model.
+Even though forecast might be reasonably good, MAPE could be very high due to those zero values.
+
+>The MAE may be preferred because it is simple to explain. 
+If all data are positive and much greater than zero, the MAPE may be
+preferred for reasons of simplicity as well.  
+Lower the values of these measures, the more accurate prediction model is.  
+
+>As an example, the examples below shows the accuracy metrics of the prediction of Naive and Exponential Smoothing models.
+
+```{r Accnaive}
+fcAccNaive <- naive(fc$x,h=18)
+accuracy(fcAccNaive, fc$xx)
+```
+
+```{r Accses}
+fcAccSES <- ses(fc$x,h=18)
+accuracy(fcAccSES, fc$xx)
+```
+
+>We can compare two models with the indicator MAPE.  
+Second model has lower MAPE value on test set, we  can say that it is better model.
+
+## IV. SIMPLE MODEL
+
+>***a.	Discuss which simple model (mean, random walk, random walk with drift, seasonal naive, etc) is the most appropriate for this the time series.***   
+In this section, some simple models are used for forecasting.  
+* **Mean(average)** method, the forecasts of all future values are estimated as equal to the average.    
+* **Naive(random walk)** method, simply set all forecasts to be the value of the last observation.   
+* **Drift(random walk with drift)** method, a variation on the naïve method is to allow the forecasts to increase or decrease over time, where the amount of change over time (called the drift) is set to be the average change seen in the historical data.  
+* **Seasonal Naive** method, set each forecast to be equal to the last observed value from the same season of the year.  
+
+>The time series has no seasonality, but decreasing trend. 
+And since the autocorrelagram graph lies between the blue borders, it can be random walk model and we can consider Naive and Drift models more suitable for this time series.
+
+```{r simpleModel, echo=FALSE}
+autoplot(fc$x) +  autolayer(meanf(fc$x, h=18),series="Mean", PI=FALSE) +
+  		autolayer(naive(fc$x, h=18),series="Naïve", PI=FALSE) +
+ 		autolayer(snaive(fc$x, h=18),series="Seasonal naïve", PI=FALSE) +
+  		autolayer(rwf(fc$x, drift=TRUE, h=18),series="Drift", PI=FALSE) 
+```
+
+>***b.	Fit the selected model, check its residuals and the performance on the test set and compare it with your goal.***  
+
+```{r residualNaive, echo=FALSE}
+checkresiduals(naive(fc$x))
+```
+
+```{r accuracyNaive, echo=FALSE}
+accuracy(naive(window(fc$x, start=c(1990,1), frequency=12),h=18), fc$xx)
+```
+
+>For Naive Model, P-value 1.429e-05 shows the null hypothesis is rejected. Residuals are Gaussian distributed, oscilated around the value 0 and the autocorrelagram shows the residuals are not correlated. The MAPE value is 38.22% on test data.
+
+```{r residualDrift, echo=FALSE}
+checkresiduals(rwf(fc$x), drift=TRUE)
+```
+
+```{r accuracyDrift, echo=FALSE}
+accuracy(rwf(window(fc$x, start=c(1990,1), frequency=12),h=18, drift = TRUE), fc$xx)
+```
+
+>For Drift Model, P-value 1.429e-05 shows the null hypothesis is rejected. Residuals are Gaussian distributed, oscilated around the value 0 and the autocorrelagram shows the residuals are not correlated. The MAPE value is 28.05% on test data.
+Which makes Drift model more accurate than the Naive model.
+
+## V. Exponential Smoothing
+
+>***a.	Hypothesize which type of exponential smoothing model could be appropriate. Fit the model, check its residuals and the performance on the test set.***  
+In this section, types of exponential smoothing models such as Simple Exponential Smoothing, Holt's Linear Model and Damped Trend Model are compared. 
+The time series have a trend but it is not linear, long term decreasing trend. 
+
+```{r fc}
+fcSES <- ses(fc$x, h=18)
+fcHolt <- holt(fc$x, h=18)
+fcDamped <- holt(fc$x, damped=TRUE, h=18)
+```
+
+```{r fcExpSmo, echo=FALSE}
+autoplot(fc$x) + autolayer(fc$xx, series = "Test") +
+  autolayer(fcSES, series="SES method", PI=FALSE) +
+  autolayer(fcHolt, series="Holt's Linear method", PI=FALSE) +
+  autolayer(fcDamped, series="Damped Holt's method", PI=FALSE) 
+```
+
+>The forecasting results shows SES method has more accurate values than the other methods. 
+
+>***b.	Compare with the results of the simple model.***  
+Simple Exponential Model:
+
+```{r sesForecast, echo=FALSE}
+fcSES <- ses(fc$x, h=18) # Estimated parameters: 
+fcSES[["model"]]
+```
+
+```{r sesFc, echo=FALSE}
+fit1 <- ses(fc$x)
+accuracy(fit1, fc$xx)
+```
+
+>Holt's Linear model:
+
+```{r HoltForecast, echo=FALSE}
+fcHolt <- holt(fc$x, h=18) # Estimated parameters: 
+fcHolt[["model"]]
+```
+
+```{r holtFc, echo=FALSE}
+fit2 <- holt(fc$x)
+accuracy(fit2, fc$xx) 
+```
+
+>Damped Holt's model:
+
+```{r DampedForecast, echo=FALSE}
+fcDamped <- holt(fc$x, h=18, damped=TRUE) # Estimated parameters: 
+fcDamped[["model"]]
+```
+
+```{r dampedFc, echo=FALSE}
+fit3 <- holt(fc$x, damped=TRUE)
+accuracy(fit3, fc$xx)
+```
+
+>SES model has 20.36% MAPE value which was the lowest at Drift model with 30.15% MAPE value.  
+AIC value of SES is 911.49, where Holt's is 914.69 and Damped is 915.56. By comparing AIC values we can say that SES is the best exponential smoothing method within these 3.
+
+
+
+## VI. ETS and AUTO-ARIMA
+
+>***a.	Fit, check the residual and the test set performance of both ets and auto.arima.***  
+The function ETS shows that the time series has multiplicative error component, additive trend with no seasonality (M,A,N).
+
+```{r ETS}
+fitETS <- ets(fc$x)
+summary(fitETS) 
+autoplot(fitETS)
+```
+  
+>AIC value of ETS(M,A,N) model is 902.62.
+
+```{r residualETS}
+checkresiduals(fitETS)
+```
+
+>Residuals of the time series showing WN behavior with the features like the values are Gaussian distributed, oscillated around 0 and autocorrelagram shows the residuals lays within the blue borders.  
+P-Value shows that the null hypothesis is almost rejected.     
+
+>Exponential smoothing and ARIMA models are the two most widely used approaches to time series forecasting.
+While exponential smoothing models are based on a description of the trend and seasonality in the data, ARIMA models aim to describe the autocorrelations in the data. Before we introduce ARIMA models, we must check the concept of stationarity. 
+
+```{r stationary}
+nsdiffs(fc$x)
+ndiffs(fc$x) 
+ndiffs(diff(fc$x))
+```
+
+>Since our model has no seasonality, nsdiffs returns 0 (no seasonal differencing needed).   
+To make the time series stationary, we need to calculate differencing once(ndiffs returns 1 for time series, further differencing not needed).
+
+```{r autoArima}
+fitArima <- auto.arima(diff(fc$x) ) 
+autoplot(forecast(fitArima)) 
+```
+
+>The function auto.arima() returns the time series as ARIMA(4,0,0) with zero mean, which means, p(order of autoregressive part) is 4, d(differencing) equals 0, q(order of the moving average part) is 0.
+
+```{r AccArima}
+fitArima
+```
+
+>AIC value of ARIMA(4,0,0) model is 839.64.
+
+```{r ResArima}
+checkresiduals(fitArima)
+```
+
+
+>***b.	Compare their results to the results of the previous models and discuss any important characteristic that such models might contain.***  
+If we compare ETS(M,A,N) and ARIMA(4,0,0) models on the same time series we can say that ARIMA model has better performance since the AIC value is lower than the ETS model.
+
+## VII. CONCLUSIONS
+
+>***a.	State the most important conclusions of your analysis.***  
+The chosen time series showing decreasing trend with no seasonality or no cyclic pattern. Residuals are showing almost White Noise behavior.  
+Comparing the simple, exponential smoothing, ETS and ARIMA models, the most accurate model was ARIMA(4,0,0) with one time differenced time series 
+
